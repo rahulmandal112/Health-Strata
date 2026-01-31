@@ -7,6 +7,7 @@ app=Flask(__name__)
 
 # Load the model
 model=pickle.load(open('health_dt_model.pkl','rb'))
+MODEL_FEATURES = model.feature_names_in_
 
 BOOLEAN_FIELDS = [
     "Diet_Type__Vegan",
@@ -29,13 +30,25 @@ def normalize_bool(value):
 def clean_input(data: dict):
     cleaned = {}
 
-    for key, value in data.items():
-        if key in BOOLEAN_FIELDS:
-            cleaned[key] = normalize_bool(value)
+    # First: normalize incoming fields
+    for key in MODEL_FEATURES:
+        if key in data:
+            value = data[key]
+
+            if key in BOOLEAN_FIELDS:
+                cleaned[key] = normalize_bool(value)
+            else:
+                try:
+                    cleaned[key] = float(value)
+                except:
+                    cleaned[key] = 0
         else:
-            cleaned[key] = value
+            # Missing column → set to 0
+            cleaned[key] = 0
 
     return cleaned
+
+
 
 @app.route('/')
 def home():
@@ -53,6 +66,16 @@ def pedict_api():
     print(output[0])
     return jsonify({
         "prediction":int(output[0])})
+
+@app.route('/predict',methods=['POST'])
+def predict():
+    data=request.form.to_dict()
+    print(data)
+    cleaned_data = clean_input(data)
+    new_data=pd.DataFrame([cleaned_data])
+    output=model.predict(new_data)
+    return render_template("home.html",prediction_text=f"The health issue prediction is {int(output[0])}")
+
 
 if __name__ == "__main__":
     app.run(debug=True)
